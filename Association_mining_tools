@@ -1,0 +1,112 @@
+def complete_rules(freq_A, freq_B, freq_AB, Total):
+    def support(freq_AB, Total):
+        try:
+            result = np.round(freq_AB/Total, 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+    
+    def confidence(freq_AB, freq_A):
+        try:
+            result = np.round(freq_AB/freq_A, 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+    
+    def completedness(freq_AB, freq_B):
+        try:
+            result = np.round(freq_AB/freq_B, 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+    
+    def lift(supportAB, supportA, supportB):
+        try:
+            result =  np.round((supportAB/(supportA * supportB)), 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+
+    def conviction(supportB, confidenceAB):
+        try:
+            result = np.round((1 - supportB)/ (1 - confidenceAB), 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+    
+    def interestingness(freq_AB, freq_A, freq_B, Total):
+        try:
+            result = np.round((freq_AB - ((freq_A * freq_B)/Total)), 4)
+        except ZeroDivisionError as err:
+#             print('result is inconclusive')
+            result = np.nan
+        return result
+    
+    return pd.Series({'support': support(freq_AB, Total),
+           'confidence': confidence(freq_AB, freq_A),
+           'completedness': completedness(freq_AB, freq_B),
+           'lift': lift(supportAB, supportA, supportB),
+           'conviction': conviction(supportB, confidenceAB),
+           'interestingness': interestingness(freq_AB, freq_A, freq_B, Total)})
+           
+
+def association_rules(A:str, B: str, df, report_as_df: bool=True):
+    """compute the support, confidence, completedness, lift, conviction, interestingness
+    for columns A and B."""
+    
+    unqA = df[A].unique()
+    unqB = df[B].unique()
+    total = len(df)
+    result = dict()
+    
+    for a in unqA:
+        freqA = len(df.loc[df[A] == a])
+        for b in unqB:
+            freqB = len(df.loc[df[B] == b])
+            freqAB = len(df.loc[(df[A] == a) &
+                                (df[B] == b)])
+            result[f'{a} & {b}'] = complete_rules(freqA, freqB, freqAB, total)
+    if report_as_df:
+        return pd.DataFrame(data=result.values(), index=result.keys()).sort_index()
+    return result
+
+
+def select_top_five_threshold(association_rules_df, support_thresh=0.5, confidence_thresh=0.5):
+    """pick the top 5 above threshold value."""
+    
+    return association_rules_df.loc[(association_rules_df['support'] >= support_thresh) &
+                                    (association_rules_df['confidence'] >= confidence_thresh)].sort_values(['support', 'confidence'], ascending=False).iloc[:5]
+
+
+def association_rules_many(df, A: list, B: str):
+    """compute association rules for two columns (A) and
+    single column (B)"""
+    
+    unq_B = df[B].unique()
+
+    for main_col in A:
+        unq_main_vals = df[main_col].unique()
+        others = list(A)
+        others.remove(main_col)
+        unq_other_vals = {}
+
+        for other_col in others:
+            unq_other_vals[other_col] = df[other_col].unique()
+        for b in unq_B:   
+            for main_unq in unq_main_vals:
+                for ocol, other_unq in unq_other_vals.items():
+                    for val in other_unq:
+                        freqA = len(df.loc[(df[main_col] == main_unq) &
+                                               (df[ocol] == val)])
+                        freqB = len(df.loc[df[B] == b])
+                        freqAB = len(df.loc[(df[main_col] == main_unq) &
+                                               (df[ocol] == val) &
+                                               (df[B] == b)])
+                        result[f"{main_unq} + {val} & {b}"] = complete_rules(freqA, freqB, freqAB, total)
+
+    return pd.DataFrame(data=result.values(), index=result.keys()).sort_index()
